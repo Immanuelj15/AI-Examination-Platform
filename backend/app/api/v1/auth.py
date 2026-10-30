@@ -81,20 +81,24 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)):
 def get_current_user_profile(current_user: User = Depends(get_current_user)):
     return current_user
 
-@router.post("/register", response_model=UserResponse)
-def register_student(payload: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == payload.email.lower().strip()).first()
+@router.post("/register", response_model=Token)
+def register_user(payload: UserCreate, db: Session = Depends(get_db)):
+    email_clean = payload.email.lower().strip()
+    existing = db.query(User).filter(User.email == email_clean).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email already exists"
+            detail="An account with this email already exists. Please sign in."
         )
 
+    # Only STUDENT and EXAMINER are allowed for self-registration. ADMIN is strictly forbidden here!
+    assigned_role = "EXAMINER" if payload.role and payload.role.upper() == "EXAMINER" else "STUDENT"
+
     user = User(
-        email=payload.email.lower().strip(),
+        email=email_clean,
         hashed_password=get_password_hash(payload.password),
-        full_name=payload.full_name,
-        role="STUDENT",  # Public registration is strictly for candidate students
+        full_name=payload.full_name.strip(),
+        role=assigned_role,
         phone=payload.phone,
         organization_id=payload.organization_id,
         is_active=True
@@ -102,4 +106,27 @@ def register_student(payload: UserCreate, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+
+    access_token = create_access_token(subject=user.id, role=user.role)
+    refresh_token = create_refresh_token(subject=user.id, role=user.role)
+
+    # Audit log
+    log = AuditLog(
+        user_id=user.id,
+        action="USER_REGISTERED",
+        resource_type="AUTH",
+        resource_id=str(user.id),
+        details={"email": user.email, "role": user.role}
+    )
+    db.add(log)
+    db.commit()
+
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        role=user.role,
+        user_id=user.id,
+        full_name=user.full_name,
+        email=user.email
+    )

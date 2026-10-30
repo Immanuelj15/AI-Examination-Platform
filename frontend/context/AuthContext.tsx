@@ -17,6 +17,12 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   loginAsDemo: (role: "ADMIN" | "EXAMINER" | "STUDENT") => Promise<boolean>;
+  register: (
+    fullName: string,
+    email: string,
+    password: string,
+    role: "EXAMINER" | "STUDENT"
+  ) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
 }
 
@@ -28,6 +34,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   login: async () => false,
   loginAsDemo: async () => false,
+  register: async () => ({ success: false }),
   logout: () => {},
 });
 
@@ -101,6 +108,52 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return await login(c.email, c.password);
   };
 
+  const register = async (
+    fullName: string,
+    email: string,
+    password: string,
+    role: "EXAMINER" | "STUDENT" = "STUDENT"
+  ): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          role
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, message: data.detail || "Registration failed." };
+      }
+      const userProfile: UserProfile = {
+        id: data.user_id,
+        email: data.email,
+        full_name: data.full_name,
+        role: data.role as "EXAMINER" | "STUDENT"
+      };
+
+      setToken(data.access_token);
+      setUser(userProfile);
+      localStorage.setItem("evalora_token", data.access_token);
+      localStorage.setItem("evalora_refresh", data.refresh_token);
+      localStorage.setItem("evalora_user", JSON.stringify(userProfile));
+
+      if (userProfile.role === "EXAMINER") {
+        router.push("/examiner/dashboard");
+      } else {
+        router.push("/student/dashboard");
+      }
+      return { success: true };
+    } catch (e) {
+      console.error("Registration failed", e);
+      return { success: false, message: "Unable to connect to server. Please try again." };
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken(null);
@@ -111,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, loginAsDemo, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, loginAsDemo, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

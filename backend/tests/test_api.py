@@ -97,3 +97,29 @@ def test_admin_analytics():
     data = response.json()
     assert data["total_students"] >= 10
     assert data["active_exams"] >= 1
+
+def test_register_user_student_and_examiner():
+    import uuid
+    rand_email = f"newstudent_{uuid.uuid4().hex[:6]}@example.com"
+    res = client.post("/api/v1/auth/register", json={
+        "full_name": "Test Candidate",
+        "email": rand_email,
+        "password": "Password@123",
+        "role": "STUDENT"
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert "access_token" in data
+    assert data["role"] == "STUDENT"
+    assert data["email"] == rand_email
+
+    rand_examiner = f"newexaminer_{uuid.uuid4().hex[:6]}@example.com"
+    res2 = client.post("/api/v1/auth/register", json={
+        "full_name": "Test Faculty",
+        "email": rand_examiner,
+        "password": "Password@123",
+        "role": "EXAMINER"
+    })
+    assert res2.status_code == 200
+    data2 = res2.json()
+    assert data2["role"] == "EXAMINER"
