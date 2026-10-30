@@ -599,7 +599,7 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* 2. ENTERPRISE ECOSYSTEM DEPLOYMENT BAND */}
       {/* ========================================================= */}
-      <section className="py-6 bg-slate-50/70 border-b border-slate-200/80">
+      <section id="about" className="py-6 bg-slate-50/70 border-b border-slate-200/80 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row items-center justify-between gap-4 lg:gap-8">
             <div className="flex-shrink-0 text-center lg:text-left">
@@ -638,7 +638,7 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* 3. NEW INTERACTIVE WORKFLOW PIPELINE WITH ENERGY PULSE */}
       {/* ========================================================= */}
-      <section id="workflow" className="py-16 lg:py-20 bg-white border-b border-slate-200/70">
+      <section id="workflow" className="py-16 lg:py-20 bg-white border-b border-slate-200/70 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           
           <div className="text-center max-w-3xl mx-auto space-y-3">
@@ -777,7 +777,7 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* 4. CAPABILITIES BENTO GRID WITH CARD HOVER ELEVATION */}
       {/* ========================================================= */}
-      <section id="features" className="py-16 lg:py-20 bg-[#F8FAFC]">
+      <section id="features" className="py-16 lg:py-20 bg-[#F8FAFC] scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           
           <div className="text-center max-w-3xl mx-auto space-y-3">
@@ -984,7 +984,7 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* 5. BANK-GRADE SECURITY & COMPLIANCE SECTION */}
       {/* ========================================================= */}
-      <section id="security" className="py-16 lg:py-20 bg-white border-y border-slate-200/80">
+      <section id="security" className="py-16 lg:py-20 bg-white border-y border-slate-200/80 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           
           <div className="text-center max-w-3xl mx-auto space-y-3">
@@ -1107,7 +1107,7 @@ export default function LandingPage() {
       {/* ========================================================= */}
       {/* 7. ENTERPRISE FOOTER */}
       {/* ========================================================= */}
-      <footer className="bg-slate-900 text-slate-400 text-sm py-12 lg:py-16 border-t border-slate-800">
+      <footer id="contact" className="bg-slate-900 text-slate-400 text-sm py-12 lg:py-16 border-t border-slate-800 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
             

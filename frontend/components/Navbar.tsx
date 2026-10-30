@@ -34,41 +34,48 @@ export function Navbar() {
           </div>
         </Link>
 
-        {/* Desktop Nav Links: Clean compact flex with balanced spacing */}
-        <nav className="hidden md:flex items-center gap-1 text-[13px] font-semibold text-slate-600">
+        {/* Desktop Nav Links: Standard corporate website navigation */}
+        <nav className="hidden md:flex items-center gap-1.5 text-sm font-semibold text-slate-600">
+          <Link
+            href="/"
+            className="px-3.5 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
+          >
+            Home
+          </Link>
+
+          <Link
+            href="#about"
+            className="px-3.5 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
+          >
+            About Us
+          </Link>
+          
           <Link
             href="#features"
-            className="px-3 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
+            className="px-3.5 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
           >
-            Capabilities
+            Features
           </Link>
-          
-          <Link
-            href="#proctoring"
-            className="px-3 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
-          >
-            AI Proctoring
-          </Link>
-          
+
           <Link
             href="#workflow"
-            className="px-3 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
+            className="px-3.5 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
           >
-            Workflow Architecture
+            Workflow
           </Link>
           
           <Link
             href="#security"
-            className="px-3 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
+            className="px-3.5 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
           >
-            Bank-Grade Security
+            Security
           </Link>
           
           <Link
-            href="#interactive-demo"
-            className="px-3 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
+            href="#contact"
+            className="px-3.5 py-1.5 rounded-lg text-slate-700 hover:text-[#123B7A] hover:bg-slate-100/80 transition-all font-medium whitespace-nowrap"
           >
-            Live HUD Demo
+            Contact
           </Link>
         </nav>
 
@@ -136,39 +143,46 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 px-5 py-4 space-y-2 bg-white shadow-lg">
           <Link
+            href="/"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
+          >
+            Home
+          </Link>
+          <Link
+            href="#about"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
+          >
+            About Us
+          </Link>
+          <Link
             href="#features"
             onClick={() => setMobileMenuOpen(false)}
             className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
           >
-            Capabilities
-          </Link>
-          <Link
-            href="#proctoring"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
-          >
-            AI Proctoring
+            Features
           </Link>
           <Link
             href="#workflow"
             onClick={() => setMobileMenuOpen(false)}
             className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
           >
-            Workflow Architecture
+            Workflow
           </Link>
           <Link
             href="#security"
             onClick={() => setMobileMenuOpen(false)}
             className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
           >
-            Bank-Grade Security
+            Security
           </Link>
           <Link
-            href="#interactive-demo"
+            href="#contact"
             onClick={() => setMobileMenuOpen(false)}
             className="block px-3 py-2 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-[#123B7A]"
           >
-            Live HUD Demo
+            Contact
           </Link>
           <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
             <Link
