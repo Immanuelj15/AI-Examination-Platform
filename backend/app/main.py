@@ -50,6 +50,26 @@ app.include_router(grading.router, prefix=api_v1_prefix)
 app.include_router(results.router, prefix=api_v1_prefix)
 app.include_router(notifications.router, prefix=api_v1_prefix)
 
+@app.on_event("startup")
+def auto_seed_fresh_database():
+    """Ensure initial users and demo exams exist on clean cloud deployments."""
+    from app.core.database import SessionLocal
+    from app.models.models import User
+    import logging
+    db = SessionLocal()
+    try:
+        if db.query(User).count() == 0:
+            logging.info("Fresh database detected. Auto-seeding initial users and exams...")
+            try:
+                import seed
+                seed.run_seed()
+            except Exception as e:
+                logging.warning(f"Auto-seed encountered: {e}")
+    except Exception as ex:
+        logging.warning(f"Startup check failed: {ex}")
+    finally:
+        db.close()
+
 @app.websocket("/ws/live-monitoring")
 async def websocket_live_monitoring(websocket: WebSocket):
     await manager.connect(websocket)
