@@ -3,11 +3,6 @@ import io
 import hashlib
 from typing import Optional
 from datetime import datetime
-from reportlab.lib.pagesizes import letter, landscape
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import qrcode
 
 class CertificateService:
     @staticmethod
@@ -26,6 +21,18 @@ class CertificateService:
         date_str: Optional[str] = None,
         verify_base_url: str = "http://localhost:3000/verify"
     ) -> bytes:
+        try:
+            from reportlab.lib.pagesizes import letter, landscape
+            from reportlab.lib import colors
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            import qrcode
+        except ImportError as exc:
+            raise RuntimeError(
+                f"PDF generation requires 'reportlab', 'qrcode', and 'Pillow'. "
+                f"Please run 'pip install reportlab qrcode Pillow': {exc}"
+            ) from exc
+
         if not date_str:
             date_str = datetime.utcnow().strftime("%B %d, %Y")
 
