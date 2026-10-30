@@ -1,0 +1,61 @@
+{
+  "brand": {
+    "name": "Evalora",
+    "tagline": "Enterprise Assessment Cloud",
+    "headline": "Smarter Assessments. Secure Examinations. Better Outcomes.",
+    "subheading": "An intelligent, AI-powered examination platform built for universities, corporates, and modern assessment teams."
+  },
+  "nav": {
+    "home": "Home",
+    "features": "Features",
+    "proctoring": "AI Proctoring",
+    "colleges": "For Colleges",
+    "corporates": "For Corporates",
+    "pricing": "Pricing",
+    "login": "Sign In",
+    "dashboard": "Dashboard",
+    "logout": "Sign Out",
+    "startAssessing": "Start Assessing",
+    "explorePlatform": "Explore Platform"
+  },
+  "roles": {
+    "admin": "Admin Portal",
+    "examiner": "Examiner Portal",
+    "student": "Student Portal"
+  },
+  "exam": {
+    "timer": "Time Remaining",
+    "submit": "Submit Examination",
+    "answered": "Answered",
+    "unanswered": "Unanswered",
+    "flagged": "Flagged",
+    "markForReview": "Mark for Review",
+    "clearAnswer": "Clear Response",
+    "saveAndNext": "Save & Next",
+    "previous": "Previous",
+    "instructions": "Exam Instructions",
+    "startExam": "Start Examination",
+    "connectionInterrupted": "Connection interrupted. Your answers are being protected locally. Reconnect to continue.",
+    "submitting": "Submitting and finalizing responses..."
+  },
+  "proctoring": {
+    "cameraActive": "Camera Active",
+    "faceDetected": "Face Detected",
+    "monitoringActive": "Monitoring Active",
+    "connectionStable": "Connection: Stable",
+    "warningFocus": "Please remain focused on the examination screen.",
+    "suspiciousDetected": "Suspicious activity detected. This session has been flagged for examiner review."
+  },
+  "auth": {
+    "signInTitle": "Sign in to Evalora",
+    "signInSubtitle": "Select your portal or enter your institutional credentials",
+    "email": "Email Address",
+    "password": "Password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot password?",
+    "signInButton": "Access Assessment Cloud",
+    "demoAdmin": "Demo Admin",
+    "demoExaminer": "Demo Examiner",
+    "demoStudent": "Demo Student"
+  }
+}
