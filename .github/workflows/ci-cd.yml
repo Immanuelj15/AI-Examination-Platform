@@ -43,7 +43,8 @@ jobs:
       - name: Run Alembic Migration Checks
         run: |
           cd backend
-          alembic check || alembic upgrade head
+          alembic upgrade head
+          alembic check
 
       - name: Run Pytest Test Suite
         env:
