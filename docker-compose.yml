@@ -51,6 +51,9 @@ services:
       - JWT_REFRESH_SECRET=evalora-super-secure-refresh-jwt-key-32chars-minimum-hash
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+      - GROQ_FALLBACK_MODEL=${GROQ_FALLBACK_MODEL:-openai/gpt-oss-20b}
     ports:
       - "8000:8000"
 
