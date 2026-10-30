@@ -46,6 +46,14 @@ export default function QuestionBankPage() {
   const [previewQuestion, setPreviewQuestion] = useState<any | null>(null);
   const [previewRoleView, setPreviewRoleView] = useState<"student" | "examiner">("student");
 
+  // AI Syllabus Question Generator Modal State
+  const [syllabusModalOpen, setSyllabusModalOpen] = useState(false);
+  const [syllabusText, setSyllabusText] = useState("");
+  const [syllabusSubject, setSyllabusSubject] = useState("Computer Science");
+  const [syllabusCount, setSyllabusCount] = useState(5);
+  const [syllabusDifficulty, setSyllabusDifficulty] = useState("MEDIUM");
+  const [generatingFromSyllabus, setGeneratingFromSyllabus] = useState(false);
+
   // Fetch data
   const fetchData = async () => {
     setLoading(true);
@@ -108,6 +116,46 @@ export default function QuestionBankPage() {
       showFeedback("error", "Network error duplicating question.");
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleGenerateFromSyllabus = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!syllabusText.trim()) {
+      showFeedback("error", "Please provide syllabus text or topics to generate questions.");
+      return;
+    }
+    setGeneratingFromSyllabus(true);
+    try {
+      const token = localStorage.getItem("evalora_token");
+      const res = await fetch(`${API_BASE}/questions/generate-from-syllabus`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          syllabus_text: syllabusText,
+          subject: syllabusSubject,
+          count: syllabusCount,
+          difficulty: syllabusDifficulty
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        showFeedback("success", `✓ AI generated ${data.count} comprehensive questions directly into your Question Bank!`);
+        setSyllabusModalOpen(false);
+        setSyllabusText("");
+        await fetchData();
+      } else {
+        const err = await res.json();
+        showFeedback("error", err.detail || "Failed to generate questions from syllabus.");
+      }
+    } catch (e) {
+      showFeedback("error", "Network error contacting AI syllabus generator.");
+    } finally {
+      setGeneratingFromSyllabus(false);
     }
   };
 
@@ -203,8 +251,15 @@ export default function QuestionBankPage() {
 
           <div className="flex items-center gap-3">
             <button
+              onClick={() => setSyllabusModalOpen(true)}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100/70 text-[#123B7A] text-sm font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-blue-600" />
+              <span>AI Syllabus Generator</span>
+            </button>
+            <button
               onClick={handleExport}
-              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-all shadow-xs"
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-all shadow-xs cursor-pointer"
             >
               <Download className="w-4 h-4 text-slate-500" />
               <span>Export Questions</span>
@@ -776,6 +831,117 @@ export default function QuestionBankPage() {
                   Close Preview
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Syllabus Generator Modal */}
+      <AnimatePresence>
+        {syllabusModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="max-w-xl w-full bg-white rounded-3xl p-7 space-y-5 shadow-2xl border border-slate-200"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#123B7A] flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">AI Question Generator from Syllabus</h3>
+                    <p className="text-xs text-slate-500">Auto-parse curriculum topics into MCQs, rubrics, and code questions</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSyllabusModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleGenerateFromSyllabus} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Subject / Course</label>
+                    <input
+                      type="text"
+                      required
+                      value={syllabusSubject}
+                      onChange={(e) => setSyllabusSubject(e.target.value)}
+                      placeholder="e.g. Data Structures"
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#123B7A]/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Questions Count</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={syllabusCount}
+                      onChange={(e) => setSyllabusCount(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#123B7A]/20"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Difficulty</label>
+                    <select
+                      value={syllabusDifficulty}
+                      onChange={(e) => setSyllabusDifficulty(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#123B7A]/20 bg-white"
+                    >
+                      <option value="EASY">Easy</option>
+                      <option value="MEDIUM">Medium</option>
+                      <option value="HARD">Hard</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Syllabus Text / Chapter Outline</label>
+                    <span className="text-[11px] text-slate-400">Paste syllabus topics or chapter concepts</span>
+                  </div>
+                  <textarea
+                    rows={6}
+                    required
+                    value={syllabusText}
+                    onChange={(e) => setSyllabusText(e.target.value)}
+                    placeholder="e.g. Unit 3: Tree Data Structures - Binary Search Trees, AVL Trees balancing factors, Red-Black properties, BFS and DFS tree traversals with recursion..."
+                    className="w-full p-3.5 border border-slate-200 rounded-xl text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#123B7A]/20"
+                  />
+                </div>
+
+                <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-[11px] text-blue-900 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  <span>The AI generates plausible distractors, grading rubrics, and automated test cases and directly adds them to your Question Bank.</span>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setSyllabusModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={generatingFromSyllabus}
+                    className="px-5 py-2.5 rounded-xl bg-[#123B7A] hover:bg-[#1E4B94] disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{generatingFromSyllabus ? "Generating & Saving..." : "Generate & Add to Bank"}</span>
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

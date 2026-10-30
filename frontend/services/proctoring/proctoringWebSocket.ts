@@ -32,6 +32,7 @@ export class ProctoringWebSocket {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private onWarningCallback?: (msg: string) => void;
   private onStatusChangeCallback?: (connected: boolean) => void;
+  private onCommandCallback?: (cmd: any) => void;
 
   constructor(sessionId: number | string, wsUrl?: string) {
     this.sessionId = sessionId;
@@ -43,10 +44,12 @@ export class ProctoringWebSocket {
 
   public connect(
     onWarning?: (msg: string) => void,
-    onStatusChange?: (connected: boolean) => void
+    onStatusChange?: (connected: boolean) => void,
+    onCommand?: (cmd: any) => void
   ): void {
     this.onWarningCallback = onWarning;
     this.onStatusChangeCallback = onStatusChange;
+    this.onCommandCallback = onCommand;
     this.initSocket();
   }
 
@@ -65,6 +68,9 @@ export class ProctoringWebSocket {
           const data = JSON.parse(event.data);
           if (data.warning) {
             this.onWarningCallback?.(data.warning);
+          }
+          if (this.onCommandCallback) {
+            this.onCommandCallback(data);
           }
         } catch {}
       };

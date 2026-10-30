@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Video, Eye, ShieldAlert, AlertTriangle, RefreshCw,
-  Clock, Search, UserCheck, XCircle, Bell, Wifi, Camera
+  Clock, Search, UserCheck, XCircle, Bell, Wifi, Camera,
+  Shield, Lock, Unlock, MessageSquare, Send, Smartphone, Check
 } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import { ProctoringReviewDrawer } from "@/components/ProctoringReviewDrawer";
@@ -18,6 +19,17 @@ export default function ExaminerLivePage() {
   const [filterRisk, setFilterRisk] = useState<string>("ALL");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Intervention UI State
+  const [warningModalOpen, setWarningModalOpen] = useState(false);
+  const [warningPreset, setWarningPreset] = useState("Please focus on your screen and maintain exam posture.");
+  const [customWarning, setCustomWarning] = useState("");
+  const [isScreenFrozen, setIsScreenFrozen] = useState(false);
+  const [chatDrawerOpen, setChatDrawerOpen] = useState(false);
+  const [chatMessage, setChatMessage] = useState("");
+  const [interventionNotice, setInterventionNotice] = useState<string | null>(null);
+
+  const interventionWsRef = useRef<WebSocket | null>(null);
 
   const fetchLive = async () => {
     try {
@@ -45,10 +57,94 @@ export default function ExaminerLivePage() {
     return () => clearInterval(timer);
   }, []);
 
+  // Connect intervention WebSocket when candidate selected
+  useEffect(() => {
+    if (!selectedCandidate) return;
+
+    if (interventionWsRef.current) {
+      interventionWsRef.current.close();
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(
+      `${protocol}//${window.location.hostname}:8000/ws/proctor-intervention/${selectedCandidate.session_id}`
+    );
+    interventionWsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.status === "DELIVERED") {
+          setInterventionNotice(`Command ${data.command} delivered to candidate.`);
+          setTimeout(() => setInterventionNotice(null), 4000);
+        }
+      } catch {}
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [selectedCandidate?.session_id]);
+
+  const sendInterventionCommand = (payload: any) => {
+    if (interventionWsRef.current && interventionWsRef.current.readyState === WebSocket.OPEN) {
+      interventionWsRef.current.send(JSON.stringify(payload));
+      setInterventionNotice(`Dispatched ${payload.action} signal...`);
+      setTimeout(() => setInterventionNotice(null), 3000);
+    } else {
+      alert("Intervention channel connecting... Please retry in a moment.");
+    }
+  };
+
+  const handleSendWarning = () => {
+    const text = customWarning.trim() || warningPreset;
+    sendInterventionCommand({
+      action: "WARNING",
+      message: text
+    });
+    setWarningModalOpen(false);
+    setCustomWarning("");
+  };
+
+  const handleToggleFreeze = () => {
+    const nextState = !isScreenFrozen;
+    setIsScreenFrozen(nextState);
+    sendInterventionCommand({
+      action: nextState ? "FREEZE" : "UNFREEZE",
+      message: nextState
+        ? "Assessment paused by examiner for biometric verification."
+        : "Assessment resumed."
+    });
+  };
+
+  const handleTerminateSession = () => {
+    if (
+      confirm(
+        `Are you sure you want to disqualify and TERMINATE session #${selectedCandidate?.session_id} for ${selectedCandidate?.candidate_name}? This cannot be undone.`
+      )
+    ) {
+      sendInterventionCommand({
+        action: "TERMINATE",
+        message: "Session terminated due to critical proctoring infractions."
+      });
+    }
+  };
+
+  const handleSendDirectChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatMessage.trim()) return;
+    sendInterventionCommand({
+      action: "CHAT",
+      message: chatMessage.trim()
+    });
+    setChatMessage("");
+  };
+
   const filtered = candidates.filter((c) => {
     const matchesRisk = filterRisk === "ALL" || c.suspicion_level === filterRisk;
-    const matchesSearch = c.candidate_name.toLowerCase().includes(search.toLowerCase()) ||
-                          c.exam_title.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch =
+      c.candidate_name.toLowerCase().includes(search.toLowerCase()) ||
+      c.exam_title.toLowerCase().includes(search.toLowerCase());
     return matchesRisk && matchesSearch;
   });
 
@@ -70,13 +166,18 @@ export default function ExaminerLivePage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {interventionNotice && (
+              <span className="px-3.5 py-1.5 rounded-full bg-blue-100 text-[#123B7A] text-xs font-bold border border-blue-200 animate-in fade-in">
+                {interventionNotice}
+              </span>
+            )}
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>Live Engine Connected</span>
             </div>
             <button
               onClick={fetchLive}
-              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 btn-interactive transition-all"
+              className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 btn-interactive transition-all cursor-pointer"
               title="Refresh telemetry"
             >
               <RefreshCw className="w-4.5 h-4.5" />
@@ -183,8 +284,8 @@ export default function ExaminerLivePage() {
             </div>
           </div>
 
-          {/* Right Detail Panel */}
-          <div className="w-96 border-l border-slate-200 bg-white p-6 flex flex-col justify-between overflow-y-auto">
+          {/* Right Detail Panel & Live Remote Intervention Hub */}
+          <div className="w-96 border-l border-slate-200 bg-white p-6 flex flex-col justify-between overflow-y-auto space-y-6">
             {selectedCandidate ? (
               <div className="space-y-6">
                 <div>
@@ -196,7 +297,7 @@ export default function ExaminerLivePage() {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Session ID:</span>
-                    <span className="font-mono font-bold text-slate-800">{selectedCandidate.session_id}</span>
+                    <span className="font-mono font-bold text-slate-800">#{selectedCandidate.session_id}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Connection:</span>
@@ -208,6 +309,75 @@ export default function ExaminerLivePage() {
                     <span className="text-slate-500">Calculated Suspicion:</span>
                     <span className="font-bold text-rose-600 text-base">{selectedCandidate.suspicion_score} / 100</span>
                   </div>
+                </div>
+
+                {/* REMOTE PROCTOR INTERVENTION CONTROL HUB */}
+                <div className="p-4 bg-slate-900 rounded-2xl text-white space-y-3 shadow-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-amber-400" /> Live Intervention Hub
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      onClick={() => setWarningModalOpen(true)}
+                      className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-400/40 hover:bg-amber-500/30 text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      <span>Send Warning</span>
+                    </button>
+
+                    <button
+                      onClick={handleToggleFreeze}
+                      className={`p-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                        isScreenFrozen
+                          ? "bg-emerald-600/30 border-emerald-500 text-emerald-300"
+                          : "bg-blue-600/20 border-blue-500/40 hover:bg-blue-600/30 text-blue-300"
+                      }`}
+                    >
+                      {isScreenFrozen ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                      <span>{isScreenFrozen ? "Unfreeze Screen" : "Freeze Screen"}</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setChatDrawerOpen(!chatDrawerOpen)}
+                      className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4 text-blue-400" />
+                      <span>Direct Intercom</span>
+                    </button>
+
+                    <button
+                      onClick={handleTerminateSession}
+                      className="p-2.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <XCircle className="w-4 h-4 text-rose-400" />
+                      <span>Disqualify</span>
+                    </button>
+                  </div>
+
+                  {/* Inline Intercom Chat Box */}
+                  {chatDrawerOpen && (
+                    <form onSubmit={handleSendDirectChat} className="pt-2 border-t border-slate-800 flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Type direct message to candidate..."
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-400"
+                      />
+                      <button
+                        type="submit"
+                        className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </form>
+                  )}
                 </div>
 
                 {/* Incident Event Timeline */}
@@ -255,6 +425,75 @@ export default function ExaminerLivePage() {
           </div>
         </div>
       </div>
+
+      {/* Broadcast Warning Dialog Modal */}
+      {warningModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">Issue Official Warning</h3>
+                <p className="text-xs text-slate-500">Candidate: {selectedCandidate?.candidate_name}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Preset Violation Directives</label>
+              {[
+                "Please focus on your screen and maintain exam posture.",
+                "Multiple faces detected. Ensure nobody else enters your workspace.",
+                "Unusual ambient audio / whispers detected. Please maintain total silence.",
+                "Secondary device detected. Remove all unauthorized phones or notes."
+              ].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => {
+                    setWarningPreset(p);
+                    setCustomWarning("");
+                  }}
+                  className={`w-full text-left text-xs p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    warningPreset === p && !customWarning
+                      ? "border-[#123B7A] bg-blue-50 text-[#123B7A] font-semibold"
+                      : "border-slate-200 hover:bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Or Custom Warning Text</label>
+              <textarea
+                rows={2}
+                placeholder="Enter specific instructions to candidate..."
+                value={customWarning}
+                onChange={(e) => setCustomWarning(e.target.value)}
+                className="w-full p-2.5 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#123B7A]/20"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setWarningModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendWarning}
+                className="px-4 py-2 rounded-xl bg-[#123B7A] hover:bg-[#1A4C9C] text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Dispatch Warning Immediately
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Incident Review Drawer */}
       <ProctoringReviewDrawer

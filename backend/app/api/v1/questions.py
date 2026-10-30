@@ -14,6 +14,8 @@ from app.schemas.schemas import (
     QuestionResponse, QuestionOptionCreate, SubjectResponse
 )
 from app.api.deps import require_role, get_current_user
+from app.services.syllabus_generator_service import SyllabusQuestionGeneratorService
+from app.services.code_execution_service import CodeExecutionService
 
 router = APIRouter(prefix="/questions", tags=["Question Management"])
 
@@ -448,3 +450,95 @@ async def upload_diagram_or_handwritten_image(
 @router.get("/subjects", response_model=List[SubjectResponse])
 def get_subjects_and_topics(db: Session = Depends(get_db)):
     return db.query(Subject).all()
+
+@router.post("/generate-from-syllabus")
+def generate_questions_from_syllabus(
+    payload: dict,
+    db: Session = Depends(get_db),
+    examiner: User = Depends(require_role("EXAMINER", "ADMIN"))
+):
+    """
+    AI-powered question generator from syllabus text or curriculum topics.
+    Generates MCQs, multi-select, subjective, and coding questions.
+    """
+    syllabus_text = payload.get("syllabus_text", "")
+    subject = payload.get("subject", "Computer Science")
+    count = int(payload.get("count", 5))
+    difficulty = payload.get("difficulty", "MEDIUM")
+    bank_id = payload.get("bank_id")
+
+    if not syllabus_text.strip():
+        raise HTTPException(status_code=400, detail="Syllabus or topic text is required")
+
+    generated = SyllabusQuestionGeneratorService.generate_from_syllabus(
+        syllabus_text=syllabus_text,
+        subject=subject,
+        question_count=count,
+        difficulty=difficulty
+    )
+
+    # If bank_id is provided, automatically insert questions into the bank
+    saved_ids = []
+    if bank_id:
+        for q_dict in generated:
+            subj_rec = db.query(Subject).filter(Subject.name == q_dict["subject"]).first()
+            subject_id = subj_rec.id if subj_rec else 1
+
+            new_q = Question(
+                bank_id=int(bank_id),
+                subject_id=subject_id,
+                question_text=q_dict["question_text"],
+                question_type=q_dict["question_type"],
+                difficulty=q_dict["difficulty"],
+                marks=q_dict["marks"],
+                negative_marks=0.0,
+                status="ACTIVE",
+                correct_answer=q_dict.get("correct_answer"),
+                model_answer=q_dict.get("model_answer"),
+                rubric=q_dict.get("rubric")
+            )
+            db.add(new_q)
+            db.flush()
+
+            if "options" in q_dict:
+                for idx, opt_text in enumerate(q_dict["options"]):
+                    is_corr = False
+                    if q_dict.get("correct_answer") == str(idx):
+                        is_corr = True
+                    opt_rec = QuestionOption(
+                        question_id=new_q.id,
+                        option_text=opt_text,
+                        is_correct=is_corr,
+                        order_index=idx
+                    )
+                    db.add(opt_rec)
+
+            saved_ids.append(new_q.id)
+        db.commit()
+
+    return {
+        "status": "GENERATED",
+        "count": len(generated),
+        "saved_to_bank": bool(bank_id),
+        "saved_ids": saved_ids,
+        "questions": generated
+    }
+
+@router.post("/execute-code")
+def run_code_sandbox(
+    payload: dict,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    In-browser multi-language execution sandbox against test cases.
+    Supports Python, JavaScript, and C++.
+    """
+    language = payload.get("language", "python")
+    code = payload.get("code", "")
+    test_cases = payload.get("test_cases", [])
+
+    if not code.strip():
+        raise HTTPException(status_code=400, detail="Code string cannot be empty")
+
+    result = CodeExecutionService.execute_code(language, code, test_cases)
+    return result

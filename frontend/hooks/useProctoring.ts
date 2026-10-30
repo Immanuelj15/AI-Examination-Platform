@@ -23,6 +23,7 @@ import { BrowserMonitoringService } from "@/services/proctoring/browserMonitorin
 import { ProctoringStateMachine } from "@/services/proctoring/proctoringStateMachine";
 import { ProctoringEventManager } from "@/services/proctoring/proctoringEventManager";
 import { ProctoringWebSocket } from "@/services/proctoring/proctoringWebSocket";
+import { AudioAnalysisService } from "@/services/proctoring/audioAnalysisService";
 
 interface UseProctoringOptions {
   sessionId: number | string;
@@ -58,6 +59,15 @@ export function useProctoring({
   const [webSocketConnected, setWebSocketConnected] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
 
+  // Enterprise Intervention & Dual-Camera States
+  const [isScreenFrozen, setIsScreenFrozen] = useState(false);
+  const [freezeReason, setFreezeReason] = useState("");
+  const [supervisorWarning, setSupervisorWarning] = useState<string | null>(null);
+  const [terminatedBySupervisor, setTerminatedBySupervisor] = useState(false);
+  const [isDualCameraActive, setIsDualCameraActive] = useState(false);
+  const [dualCameraFrame, setDualCameraFrame] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender: "proctor" | "candidate"; text: string; time: string }>>([]);
+
   // Service singletons
   const cameraServiceRef = useRef<CameraService>(new CameraService());
   const qualityServiceRef = useRef<CameraQualityService>(new CameraQualityService());
@@ -68,6 +78,7 @@ export function useProctoring({
   const stateMachineRef = useRef<ProctoringStateMachine>(new ProctoringStateMachine(configuration));
   const eventManagerRef = useRef<ProctoringEventManager>(new ProctoringEventManager(sessionId, apiBaseUrl));
   const wsClientRef = useRef<ProctoringWebSocket>(new ProctoringWebSocket(sessionId, wsUrl));
+  const audioServiceRef = useRef<AudioAnalysisService>(new AudioAnalysisService());
 
   const animFrameIdRef = useRef<number | null>(null);
   const isRunningRef = useRef(true);
@@ -119,10 +130,48 @@ export function useProctoring({
       }
     });
 
-    // Start WebSocket
+    // Start Acoustic AI Analysis (whisper and noise detection)
+    audioServiceRef.current.start((type, msg) => {
+      eventManagerRef.current.emitEvent(type as any, 0, 0.9);
+      addWarning(msg);
+    });
+
+    // Start WebSocket with Enterprise Proctor Intervention listener
     wsClientRef.current.connect(
       (warning) => addWarning(warning),
-      (connected) => setWebSocketConnected(connected)
+      (connected) => setWebSocketConnected(connected),
+      (cmd) => {
+        if (!cmd) return;
+        if (cmd.action === "WARNING") {
+          const msg = cmd.message || "Proctor attention required: Please maintain exam integrity.";
+          setSupervisorWarning(msg);
+          addWarning(`[Examiner Intervention] ${msg}`);
+        } else if (cmd.action === "FREEZE") {
+          setIsScreenFrozen(true);
+          setFreezeReason(cmd.message || "Assessment interface paused by examination proctor for verification.");
+        } else if (cmd.action === "UNFREEZE") {
+          setIsScreenFrozen(false);
+          setFreezeReason("");
+        } else if (cmd.action === "TERMINATE") {
+          setTerminatedBySupervisor(true);
+        } else if (cmd.action === "CHAT") {
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              id: String(Date.now()),
+              sender: "proctor",
+              text: cmd.message || "",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            }
+          ]);
+        } else if (cmd.type === "MOBILE_CAMERA_FRAME") {
+          setIsDualCameraActive(true);
+          setDualCameraFrame(cmd.payload);
+        } else if (cmd.type === "MOBILE_CAMERA_DISCONNECTED") {
+          setIsDualCameraActive(false);
+          addWarning(cmd.warning || "Secondary mobile room camera disconnected.");
+        }
+      }
     );
 
     wsClientRef.current.startHeartbeat(() => ({
@@ -251,6 +300,7 @@ export function useProctoring({
       if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       cameraServiceRef.current.stop();
       browserMonitorRef.current.stop();
+      audioServiceRef.current.stop();
       wsClientRef.current.close();
       faceDetectorRef.current.close();
       landmarkerRef.current.close();
@@ -274,6 +324,25 @@ export function useProctoring({
     detectionLatencyMs,
     webSocketConnected,
     isStreaming,
-    clearWarning
+    clearWarning,
+    isScreenFrozen,
+    freezeReason,
+    supervisorWarning,
+    setSupervisorWarning,
+    terminatedBySupervisor,
+    isDualCameraActive,
+    dualCameraFrame,
+    chatMessages,
+    sendCandidateChatMessage: (text: string) => {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: String(Date.now()),
+          sender: "candidate",
+          text,
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+        }
+      ]);
+    }
   };
 }
