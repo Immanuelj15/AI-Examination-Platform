@@ -29,7 +29,10 @@ class Settings(BaseSettings):
         "*"
     ]
     
-    # AI Subjective Evaluation
+    # AI Subjective Evaluation & Question Generation (Groq & OpenAI)
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+    GROQ_FALLBACK_MODEL: str = os.getenv("GROQ_FALLBACK_MODEL", "openai/gpt-oss-20b")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
     

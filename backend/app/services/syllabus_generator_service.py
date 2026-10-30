@@ -1,6 +1,10 @@
 import json
 import re
+import logging
 from typing import List, Dict, Any, Optional
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 class SyllabusQuestionGeneratorService:
     @classmethod
@@ -14,8 +18,85 @@ class SyllabusQuestionGeneratorService:
         """
         Parses syllabus text / curriculum headings and generates rich assessment questions:
         MCQ, multi-select, subjective, and coding challenges with distractors and rubrics.
+        Uses Groq Cloud LLM if available, with graceful offline fallback.
         """
-        # Split topics by lines, bullets, or punctuation
+        # Try Groq AI Generation first if key is available
+        if settings.GROQ_API_KEY and settings.GROQ_API_KEY.startswith("gsk_"):
+            try:
+                import httpx
+                headers = {
+                    "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                system_prompt = (
+                    "You are an expert enterprise curriculum and assessment architect. "
+                    "Given a syllabus outline, subject, difficulty, and count, generate high-quality examination questions. "
+                    "Mix question types: MCQ, MULTIPLE_CHOICE, SUBJECTIVE, and CODING. "
+                    "Return ONLY a valid JSON object matching this schema:\n"
+                    "{\n"
+                    '  "questions": [\n'
+                    '    {\n'
+                    '      "question_text": "string",\n'
+                    '      "question_type": "MCQ" | "MULTIPLE_CHOICE" | "SUBJECTIVE" | "CODING",\n'
+                    '      "subject": "string",\n'
+                    '      "topic": "string",\n'
+                    '      "difficulty": "EASY" | "MEDIUM" | "HARD",\n'
+                    '      "marks": float,\n'
+                    '      "options": ["string", "string", "string", "string"], # for MCQ/MULTIPLE_CHOICE\n'
+                    '      "correct_answer": "0" or "[0, 1]", # for MCQ/MULTIPLE_CHOICE\n'
+                    '      "model_answer": "string", # for SUBJECTIVE\n'
+                    '      "rubric": [{"concept": "string", "marks": float}], # for SUBJECTIVE\n'
+                    '      "starter_code": "string", # for CODING\n'
+                    '      "test_cases": [{"input": "string", "expected_output": "string", "is_hidden": false}] # for CODING\n'
+                    '    }\n'
+                    '  ]\n'
+                    "}"
+                )
+                user_prompt = (
+                    f"Subject: {subject}\n"
+                    f"Difficulty: {difficulty}\n"
+                    f"Required Count: {question_count}\n"
+                    f"Syllabus Content:\n{syllabus_text[:2000]}\n"
+                )
+
+                payload = {
+                    "model": settings.GROQ_MODEL,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.3
+                }
+
+                with httpx.Client(timeout=20.0) as client:
+                    resp = client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers=headers,
+                        json=payload
+                    )
+                    if resp.status_code != 200:
+                        payload["model"] = settings.GROQ_FALLBACK_MODEL
+                        resp = client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers=headers,
+                            json=payload
+                        )
+
+                    if resp.status_code == 200:
+                        raw = resp.json()["choices"][0]["message"]["content"]
+                        parsed = json.loads(raw)
+                        qs = parsed.get("questions", [])
+                        if qs and len(qs) > 0:
+                            for q in qs:
+                                q["status"] = "ACTIVE"
+                                q["subject"] = subject
+                                q["difficulty"] = difficulty
+                            return qs[:question_count]
+            except Exception as e:
+                logger.warning(f"Groq syllabus generation failed ({e}), using template fallback.")
+
+        # Deterministic Curriculum Template Fallback
         lines = [line.strip() for line in syllabus_text.splitlines() if len(line.strip()) > 3]
         if not lines:
             lines = [syllabus_text.strip()]
@@ -72,7 +153,6 @@ class SyllabusQuestionGeneratorService:
 
         for i in range(question_count):
             topic = lines[i % len(lines)]
-            # Clean topic title
             clean_topic = re.sub(r'^[0-9\.\-\*\#\s]+', '', topic).capitalize()
             tmpl = templates[i % len(templates)]
 
@@ -104,4 +184,3 @@ class SyllabusQuestionGeneratorService:
             generated_questions.append(q_data)
 
         return generated_questions
-

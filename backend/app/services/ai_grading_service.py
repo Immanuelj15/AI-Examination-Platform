@@ -8,8 +8,11 @@ logger = logging.getLogger(__name__)
 
 class AIGradingService:
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
-        self.model = settings.LLM_MODEL
+        self.groq_api_key = settings.GROQ_API_KEY
+        self.groq_model = settings.GROQ_MODEL
+        self.groq_fallback_model = settings.GROQ_FALLBACK_MODEL
+        self.openai_api_key = settings.OPENAI_API_KEY
+        self.openai_model = settings.LLM_MODEL
 
     async def evaluate_subjective_answer(
         self,
@@ -20,8 +23,8 @@ class AIGradingService:
         max_marks: float = 10.0
     ) -> Dict[str, Any]:
         """
-        Evaluates a subjective answer using OpenAI GPT if API key is present,
-        or an intelligent enterprise semantic rubric analyzer fallback.
+        Evaluates a subjective answer using Groq LLaMA / GPT-OSS if GROQ_API_KEY is present,
+        OpenAI if configured, or falls back to the intelligent enterprise semantic rubric analyzer.
         """
         if not student_answer or not student_answer.strip():
             return {
@@ -33,41 +36,90 @@ class AIGradingService:
                 "examiner_recommendation": "Confirm zero score for empty response."
             }
 
-        # If valid OPENAI_API_KEY is configured, try calling OpenAI API
-        if self.api_key and self.api_key.startswith("sk-"):
+        system_prompt = (
+            "You are an expert enterprise academic and technical examiner. "
+            "Evaluate the candidate's answer based on the question, model answer, and rubric. "
+            "Return ONLY valid JSON matching this schema:\n"
+            "{\n"
+            '  "suggested_score": float,\n'
+            '  "confidence": float between 0.0 and 1.0,\n'
+            '  "justification": string,\n'
+            '  "matched_concepts": [string],\n'
+            '  "missing_concepts": [string],\n'
+            '  "examiner_recommendation": string\n'
+            "}"
+        )
+        user_prompt = (
+            f"Question: {question_text}\n"
+            f"Model Answer: {model_answer or 'N/A'}\n"
+            f"Rubric: {json.dumps(rubric) if rubric else 'Standard semantic completeness'}\n"
+            f"Max Marks: {max_marks}\n\n"
+            f"Student Answer:\n{student_answer}\n"
+        )
+
+        # 1. Try Groq Cloud API (Ultra-low latency inference)
+        if self.groq_api_key and self.groq_api_key.startswith("gsk_"):
             try:
                 import httpx
                 headers = {
-                    "Authorization": f"Bearer {self.api_key}",
+                    "Authorization": f"Bearer {self.groq_api_key}",
                     "Content-Type": "application/json"
                 }
-                system_prompt = (
-                    "You are an expert enterprise academic and technical examiner. "
-                    "Evaluate the candidate's answer based on the question, model answer, and rubric. "
-                    "Return ONLY valid JSON matching this schema:\n"
-                    "{\n"
-                    '  "suggested_score": float,\n'
-                    '  "confidence": float between 0.0 and 1.0,\n'
-                    '  "justification": string,\n'
-                    '  "matched_concepts": [string],\n'
-                    '  "missing_concepts": [string],\n'
-                    '  "examiner_recommendation": string\n'
-                    "}"
-                )
-                user_prompt = (
-                    f"Question: {question_text}\n"
-                    f"Model Answer: {model_answer or 'N/A'}\n"
-                    f"Rubric: {json.dumps(rubric) if rubric else 'Standard semantic completeness'}\n"
-                    f"Max Marks: {max_marks}\n\n"
-                    f"Student Answer:\n{student_answer}\n"
-                )
+                payload = {
+                    "model": self.groq_model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.2
+                }
 
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    response = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers=headers,
+                        json=payload
+                    )
+                    # If primary model is unavailable, try fallback model
+                    if response.status_code != 200:
+                        payload["model"] = self.groq_fallback_model
+                        response = await client.post(
+                            "https://api.groq.com/openai/v1/chat/completions",
+                            headers=headers,
+                            json=payload
+                        )
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        content = data["choices"][0]["message"]["content"]
+                        result = json.loads(content)
+                        score = max(0.0, min(max_marks, float(result.get("suggested_score", 0.0))))
+                        return {
+                            "suggested_score": round(score, 1),
+                            "confidence": round(float(result.get("confidence", 0.92)), 2),
+                            "justification": result.get("justification", "Evaluated via Groq AI Engine."),
+                            "matched_concepts": result.get("matched_concepts", []),
+                            "missing_concepts": result.get("missing_concepts", []),
+                            "examiner_recommendation": result.get("examiner_recommendation", "Review and confirm marks.")
+                        }
+            except Exception as e:
+                logger.warning(f"Groq AI evaluation encountered error ({e}), proceeding to fallback.")
+
+        # 2. Try OpenAI API if configured
+        if self.openai_api_key and self.openai_api_key.startswith("sk-"):
+            try:
+                import httpx
+                headers = {
+                    "Authorization": f"Bearer {self.openai_api_key}",
+                    "Content-Type": "application/json"
+                }
                 async with httpx.AsyncClient(timeout=20.0) as client:
                     response = await client.post(
                         "https://api.openai.com/v1/chat/completions",
                         headers=headers,
                         json={
-                            "model": self.model,
+                            "model": self.openai_model,
                             "messages": [
                                 {"role": "system", "content": system_prompt},
                                 {"role": "user", "content": user_prompt}
@@ -80,20 +132,19 @@ class AIGradingService:
                         data = response.json()
                         content = data["choices"][0]["message"]["content"]
                         result = json.loads(content)
-                        # Clamping
                         score = max(0.0, min(max_marks, float(result.get("suggested_score", 0.0))))
                         return {
                             "suggested_score": round(score, 1),
                             "confidence": round(float(result.get("confidence", 0.85)), 2),
-                            "justification": result.get("justification", "Evaluated via LLM engine."),
+                            "justification": result.get("justification", "Evaluated via OpenAI engine."),
                             "matched_concepts": result.get("matched_concepts", []),
                             "missing_concepts": result.get("missing_concepts", []),
                             "examiner_recommendation": result.get("examiner_recommendation", "Review examiner.")
                         }
             except Exception as e:
-                logger.warning(f"OpenAI evaluation failed or unreachable ({e}), falling back to Semantic Rubric Engine.")
+                logger.warning(f"OpenAI evaluation failed ({e}), proceeding to Semantic Rubric Engine.")
 
-        # Intelligent Semantic Rubric Analyzer Fallback
+        # 3. Intelligent Semantic Rubric Analyzer Fallback (Deterministic, Zero-API-Cost)
         return self._semantic_rubric_analysis(question_text, student_answer, model_answer, rubric, max_marks)
 
     def _semantic_rubric_analysis(
